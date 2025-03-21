@@ -92,6 +92,12 @@ interface PubProxyResponse {
   }>;
 }
 
+interface ScrapRequest {
+  username: string;
+  password: string;
+  hashtag: string;
+}
+
 @Injectable()
 export class ScrapIgService {
   private readonly MAX_POSTS = 10;
@@ -109,7 +115,7 @@ export class ScrapIgService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  private async loginToInstagram(page: Page): Promise<void> {
+  private async loginToInstagram(page: Page, credentials: { username: string; password: string }): Promise<void> {
     console.log('Navigating to Instagram login page...');
     await page.goto('https://www.instagram.com/accounts/login/', {
       waitUntil: 'networkidle0',
@@ -119,8 +125,8 @@ export class ScrapIgService {
     await page.waitForSelector(SELECTORS.loginForm, { timeout: this.TIMEOUT });
     console.log('Login form found, entering credentials...');
 
-    await page.type('input[name="username"]', INSTAGRAM_CREDENTIALS.username, { delay: 50 });
-    await page.type('input[name="password"]', INSTAGRAM_CREDENTIALS.password, { delay: 50 });
+    await page.type('input[name="username"]', credentials.username, { delay: 50 });
+    await page.type('input[name="password"]', credentials.password, { delay: 50 });
     await page.click('button[type="submit"]');
 
     console.log('Waiting for login to complete...');
@@ -429,7 +435,7 @@ export class ScrapIgService {
     }
   }
 
-  async scrapIG(hashtag: string) {
+  async scrapIG(data: ScrapRequest) {
     const browser = await puppeteerExtra.launch({
       headless: true,
       args: [
@@ -443,9 +449,8 @@ export class ScrapIgService {
     });
 
     try {
-      // Get existing posts before scraping
-      const existingPosts = await this.getExistingPosts(hashtag);
-      console.log(`Found ${existingPosts.size} existing posts for hashtag #${hashtag}`);
+      const existingPosts = await this.getExistingPosts(data.hashtag);
+      console.log(`Found ${existingPosts.size} existing posts for hashtag #${data.hashtag}`);
 
       const page = await browser.newPage();
 
@@ -496,7 +501,7 @@ export class ScrapIgService {
       await this.randomMouseMovements(page);
       await this.randomDelay(1000, 2000);
 
-      await this.loginToInstagram(page);
+      await this.loginToInstagram(page, { username: data.username, password: data.password });
 
       // Random behavior after login
       await this.randomScrolling(page);
@@ -509,7 +514,7 @@ export class ScrapIgService {
       await this.randomScrolling(page);
       await this.randomDelay(1000, 2000);
 
-      await this.navigateToHashtagPage(page, hashtag);
+      await this.navigateToHashtagPage(page, data.hashtag);
 
       // Random behavior after loading hashtag page
       await this.randomMouseMovements(page);
@@ -585,13 +590,13 @@ export class ScrapIgService {
       console.log(`Successfully scraped ${allScrapedPosts.length} video posts`);
 
       const topPosts = this.getTopUniqueInfluencerPosts(allScrapedPosts);
-      const savedPosts = await this.saveNewPosts(topPosts, hashtag, existingPosts);
+      const savedPosts = await this.saveNewPosts(topPosts, data.hashtag, existingPosts);
 
       const newPostsCount = savedPosts.filter(post => !existingPosts.has(post.videoUrl)).length;
       const updatedPostsCount = savedPosts.length - newPostsCount;
 
       return {
-        message: `Processed ${savedPosts.length} posts for hashtag #${hashtag} (${newPostsCount} new, ${updatedPostsCount} updated)`,
+        message: `Processed ${savedPosts.length} posts for hashtag #${data.hashtag} (${newPostsCount} new, ${updatedPostsCount} updated)`,
         data: savedPosts,
       };
     } catch (error) {
