@@ -4,44 +4,14 @@ const UserAgent = require('user-agents');
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Page, ElementHandle, Browser, HTTPRequest } from 'puppeteer';
+import { Page, ElementHandle, HTTPRequest } from 'puppeteer';
 import puppeteerExtra from 'puppeteer-extra';
-import axios from 'axios';
 
 import { InstagramPost } from '../entities/instagram-post.entity';
 
 // Add stealth plugin
 puppeteerExtra.use(StealthPlugin());
 
-// Custom request headers for puppeteer
-const requestHeaders = {
-  'authority': 'www.google.com',
-  'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-  'accept-language': 'en-US,en;q=0.9',
-  'cache-control': 'max-age=0',
-  'sec-ch-ua': '"Not/A)Brand";v="99", "Google Chrome";v="115", "Chromium";v="115"',
-  'sec-ch-ua-arch': '"x86"',
-  'sec-ch-ua-bitness': '"64"',
-  'sec-ch-ua-full-version': '"120.0.0.0"',
-  'sec-ch-ua-full-version-list': '"Not/A)Brand";v="120.0.0.0", "Google Chrome";v="120.0.0.0", "Chromium";v="120.0.0.0"',
-  'sec-ch-ua-mobile': '?0',
-  'sec-ch-ua-model': '""',
-  'sec-ch-ua-platform': 'Windows',
-  'sec-ch-ua-platform-version': '15.0.0',
-  'sec-ch-ua-wow64': '?0',
-  'sec-fetch-dest': 'document',
-  'sec-fetch-mode': 'navigate',
-  'sec-fetch-site': 'same-origin',
-  'sec-fetch-user': '?1',
-  'upgrade-insecure-requests': '1',
-  'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-};
-
-// Instagram credentials
-const INSTAGRAM_CREDENTIALS = {
-  username: 'talhanaruto262@gmail.com',
-  password: 'talha_Sallu_Naruto17',
-};
 
 // Selectors for Instagram posts
 const SELECTORS = {
@@ -70,28 +40,6 @@ interface PostData {
   profileUrl?: string;
 }
 
-interface Proxy {
-  ip: string;
-  port: string;
-  protocol: string;
-}
-
-interface GeoNodeResponse {
-  data: Array<{
-    ip: string;
-    port: number;
-    protocols: string[];
-  }>;
-}
-
-interface PubProxyResponse {
-  data: Array<{
-    ip: string;
-    port: string;
-    type: string;
-  }>;
-}
-
 interface ScrapRequest {
   username: string;
   password: string;
@@ -103,8 +51,7 @@ export class ScrapIgService {
   private readonly MAX_POSTS = 10;
   private readonly TIMEOUT = 60000;
   private readonly MAX_SCROLL_ATTEMPTS = 10; // Maximum number of times to scroll for more content
-  private proxyList: Proxy[] = [];
-  private currentProxyIndex = 0;
+
 
   constructor(
     @InjectRepository(InstagramPost)
@@ -610,219 +557,7 @@ export class ScrapIgService {
     }
   }
 
-  private async humanLikeScroll(page: Page): Promise<void> {
-    await page.evaluate(() => {
-      const scrollAmount = Math.floor(Math.random() * 300) + 100;
-      const scrollDuration = Math.floor(Math.random() * 500) + 500;
-      const startTime = Date.now();
-
-      const smoothScroll = () => {
-        const currentTime = Date.now();
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / scrollDuration, 1);
-
-        window.scrollBy(0, scrollAmount * progress);
-
-        if (progress < 1) {
-          requestAnimationFrame(smoothScroll);
-        }
-      };
-
-      smoothScroll();
-    });
-    await this.randomDelay(500, 1500);
-  }
-
-  private async humanLikeClick(page: Page, selector: string): Promise<void> {
-    const element = await page.$(selector);
-    if (element) {
-      const box = await element.boundingBox();
-      if (box) {
-        const x = box.x + Math.random() * box.width;
-        const y = box.y + Math.random() * box.height;
-
-        await page.mouse.move(x, y, { steps: 25 });
-        await this.randomDelay(100, 300);
-        await page.mouse.click(x, y);
-      }
-    }
-  }
-
   async testScrap(hashtag: string) {
-    const browser = await puppeteerExtra.launch({
-      headless: false,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--window-size=1920,1080',
-      ],
-      defaultViewport: {
-        width: 1920,
-        height: 1080,
-      },
-    });
-
-    const page = await browser.newPage();
-
-    // Set custom headers
-    await page.setExtraHTTPHeaders(requestHeaders);
-
-    // Enable request interception
-    await page.setRequestInterception(true);
-
-    // Add random delays to requests
-    page.on('request', async (request: HTTPRequest) => {
-      // Skip images and unnecessary resources to improve performance
-      if (['image', 'stylesheet', 'font'].includes(request.resourceType())) {
-        request.abort();
-        return;
-      }
-      await this.randomDelay(100, 500);
-      request.continue();
-    });
-
-    // Add random delays to responses
-    page.on('response', async () => {
-      await this.randomDelay(100, 500);
-    });
-
-    try {
-      console.log('Navigating to login page...');
-      await page.goto('https://quotes.toscrape.com/login', {
-        waitUntil: 'networkidle0',
-        timeout: this.TIMEOUT,
-      });
-
-      // Simulate human-like behavior before interacting with the login form
-      await this.humanLikeScroll(page);
-      await this.randomDelay(1000, 2000);
-
-      await page.waitForSelector("div[class*='form-group']", { timeout: this.TIMEOUT });
-      console.log('Login form found, entering credentials...');
-
-      // Type credentials with random delays
-      await page.type('input[name="username"]', INSTAGRAM_CREDENTIALS.username, { delay: Math.random() * 100 + 50 });
-      await this.randomDelay(500, 1000);
-      await page.type('input[name="password"]', INSTAGRAM_CREDENTIALS.password, { delay: Math.random() * 100 + 50 });
-      await this.randomDelay(500, 1000);
-
-      // Click submit button with human-like behavior
-      await this.humanLikeClick(page, 'input[type="submit"]');
-
-      console.log('Waiting for login to complete...');
-      await page.waitForNavigation();
-
-      // Random delay after login
-      await this.randomDelay(2000, 4000);
-
-      console.log(`Navigating to hashtag page: #${hashtag}`);
-      await page.goto(`https://quotes.toscrape.com/tag/${hashtag}/`, {
-        waitUntil: 'networkidle0',
-        timeout: this.TIMEOUT,
-      });
-
-      // Simulate human-like scrolling before starting to scrape
-      for (let i = 0; i < 3; i++) {
-        await this.humanLikeScroll(page);
-      }
-
-      console.log('Waiting for hashtag content to load...');
-      await page.waitForSelector("ul[class*='pager']", { timeout: this.TIMEOUT });
-
-      const allScrapedPosts = [];
-      let postsProcessed = 0;
-      let scrollAttempts = 0;
-      let lastPostCount = 0;
-
-      while (scrollAttempts < this.MAX_SCROLL_ATTEMPTS) {
-        try {
-          let post;
-          const posts = await page.$$("div[class*='quote']");
-          if (postsProcessed < posts.length) {
-            // Scroll to post with human-like behavior
-            await posts[postsProcessed].evaluate(node => {
-              node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
-            await this.randomDelay(800, 1500);
-            post = posts[postsProcessed];
-          }
-
-          if (!post) {
-            if (allScrapedPosts.length === lastPostCount) {
-              console.log('No new posts found after scrolling');
-              break;
-            }
-
-            // Scroll with human-like behavior
-            await this.humanLikeScroll(page);
-            scrollAttempts++;
-            lastPostCount = allScrapedPosts.length;
-            continue;
-          }
-
-          const processedPost = await post.$$eval("div[class*='quote']", () => {
-            const text = document.querySelector('.text')?.textContent || '';
-            const author = document.querySelector('.author')?.textContent || '';
-            const authorUrl = document.querySelector('a[href*="/author/"]')?.getAttribute('href') || '';
-            const tags = Array.from(document.querySelectorAll('.tag')).map((tag) => tag.textContent);
-
-            return { text, author, authorUrl, tags };
-          });
-
-          await this.randomDelay(1000);
-
-          if (processedPost.authorUrl) {
-            const newPage = await page.browser().newPage();
-            await newPage.setViewport({ width: 1280, height: 800 });
-
-            await newPage.goto(`https://quotes.toscrape.com${processedPost.authorUrl}`, { waitUntil: 'networkidle0', timeout: 30000 });
-
-            await newPage.waitForSelector('.author-details');
-
-            // Extract author details
-            const authorDetails = await newPage.$eval('.author-details', (element) => {
-              const name = element.querySelector('.author-title')?.textContent || '';
-              const bornDate = element.querySelector('.author-born-date')?.textContent || '';
-              const bornLocation = element.querySelector('.author-born-location')?.textContent || '';
-              const description = element.querySelector('.author-description')?.textContent || '';
-
-              return { name, bornDate, bornLocation, description };
-            });
-
-            await newPage.close();
-
-            (processedPost as any).authorDetails = authorDetails;
-          }
-
-          if (processedPost) {
-            allScrapedPosts.push(processedPost);
-            console.info(`Processed video posts ${allScrapedPosts.length}`);
-          }
-
-          postsProcessed++;
-          await this.randomDelay(1000, 2000);
-
-        } catch (error) {
-          console.error(`Error processing post ${postsProcessed}:`, error);
-          postsProcessed++;
-          await this.randomDelay(1000, 2000);
-        }
-      }
-
-      return {
-        message: `Scraped quotes data`,
-        data: allScrapedPosts,
-      };
-    } catch (error) {
-      console.error('Error during scraping:', error);
-      throw new Error(`Scraping failed: ${error.message}`);
-    } finally {
-      if (browser) {
-        await browser.close();
-      }
-    }
+    return hashtag
   }
 } 
