@@ -1,3 +1,4 @@
+import { ContactInfo } from 'src/scrap-ig/scrap-ig.service';
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('instagram_posts')
@@ -22,11 +23,11 @@ export class InstagramPost {
   @Column({ name: 'influencer_name' })
   influencerName: string;
 
-  @Column({ nullable: true })
-  email: string;
-
   @Column()
   hashtag: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  contactInfo: ContactInfo;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
