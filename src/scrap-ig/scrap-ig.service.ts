@@ -16,17 +16,15 @@ puppeteerExtra.use(StealthPlugin());
 // Selectors for Instagram posts
 const SELECTORS = {
   loginForm: 'input[name="username"]',
-  posts: 'div[class*="_aagv"]',
-  description: 'h1[class*="_ap3a"]',
-  influencerName: 'div[class*="_a9zr"] a',
+  posts: 'main a[role="link"]', // Links within article elements (posts)
+  description: 'article h1, article div[role="dialog"] h1', // Description in post modal
+  influencerName: 'article header a', // Username in post header
   video: 'video',
-  closeButton: 'div[class*="x1i10hfl"][role="button"]',
-  notificationPopup: 'button[class*="aOOlW"][class*="HoLwm"]',
-  contentLoader: 'div[class*="x1iyjqo2"]',
+  closeButton: 'svg[aria-label="Close"]',
+  notificationPopup: 'button[class*="HoLwm"]',
   likeCount: [
-    'section[class*="x12nagc"] span',
-    'div[class*="_aacl"] span',
-    'div[class*="x66s6hp"] span'
+    'article section span', // Like count in post
+    'article div[role="dialog"] section span' // Like count in modal
   ]
 };
 
@@ -108,7 +106,7 @@ export class ScrapIgService {
     });
 
     console.log('Waiting for hashtag content to load...');
-    await page.waitForSelector(SELECTORS.contentLoader, { timeout: this.TIMEOUT });
+    await page.waitForSelector('main', { timeout: this.TIMEOUT });
 
     console.log('Loading more content...');
     await page.evaluate(() => {
@@ -117,7 +115,8 @@ export class ScrapIgService {
     await this.delay(2000);
 
     try {
-      await page.waitForSelector(SELECTORS.posts, { timeout: this.TIMEOUT });
+      await page.waitForSelector('main a[role="link"]', { timeout: this.TIMEOUT });
+      console.log('Posts loaded successfully');
     } catch (error) {
       console.error('Error waiting for posts:', error);
       throw new Error('No Posts Found');
@@ -127,7 +126,6 @@ export class ScrapIgService {
 
   private async getProfileData(page: Page, profileUrl: string): Promise<ContactInfo> {
     let contactData: ContactInfo = {};
-
     const newPage = await page.browser().newPage();
 
     try {
@@ -176,7 +174,7 @@ export class ScrapIgService {
       // Get all links from the bio
       const bioLinks = await newPage.evaluate(() => {
         const links: { href: string; text: string }[] = [];
-        const bioElement = document.querySelector('div[class*="x7a106z"]');
+        const bioElement = document.querySelector('header');
         if (!bioElement) return [];
 
         const extractedLinks = Array.from(bioElement.querySelectorAll('a'));
@@ -196,9 +194,6 @@ export class ScrapIgService {
 
         try {
           await newPage.goto(link.href, { waitUntil: 'networkidle0', timeout: this.TIMEOUT });
-
-          await this.randomScrolling(newPage);
-          await this.randomMouseMovements(newPage);
           await this.randomDelay(1000, 2000);
 
           // Extract text content
@@ -265,27 +260,19 @@ export class ScrapIgService {
   private async extractPostData(page: Page): Promise<PostData> {
     return await page.evaluate(() => {
       const postUrl = window.location.href;
-      const element = document.querySelector('h1[class*="_ap3a"]');
+      const element = document.querySelector('article[role="presentation"] div[role="presentation"] h1[dir="auto"] a');
       const description = element?.textContent || '';
 
       let likeCount = 0;
-      const likeSelectors = [
-        'section[class*="x12nagc"] span',
-        'div[class*="_aacl"] span',
-        'div[class*="x66s6hp"] span'
-      ];
-      for (const selector of likeSelectors) {
-        const element = document.querySelector(selector);
-        if (element?.textContent) {
-          const text = element.textContent.replace(/[^0-9]/g, '');
-          if (text) {
-            likeCount = parseInt(text);
-            break;
-          }
-        }
+      const article = document.querySelector('article[role="presentation"]');
+      if (article) {
+        const likesSpan = Array.from(article.querySelectorAll("span")).find(span =>
+          span.textContent?.includes('likes') || span.textContent?.includes('views')
+        );
+        likeCount = likesSpan ? parseInt(likesSpan.textContent?.replace(/[^0-9]/g, '') || '0') : 0;
       }
 
-      const influencerElement = document.querySelector('div[class*="_a9zr"] a');
+      const influencerElement = document.querySelector('article[role="presentation"] div[role="presentation"] h2 a');
       const influencerName = influencerElement?.textContent || '';
       const profileUrl = influencerElement?.getAttribute('href') || '';
 
