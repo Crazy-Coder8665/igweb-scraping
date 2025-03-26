@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instagram Scraper</title>
+    <title>Social Media Scraper</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * {
@@ -50,7 +50,7 @@
             font-weight: 500;
         }
 
-        input {
+        input, select {
             width: 100%;
             padding: 12px 15px;
             border: 2px solid #e1e1e1;
@@ -59,7 +59,7 @@
             transition: border-color 0.3s ease;
         }
 
-        input:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: #3897f0;
         }
@@ -96,19 +96,34 @@
             background: #f8f9fa;
             color: #4a4a4a;
         }
+
+        .instagram-only {
+            display: block;
+        }
+
+        .tiktok-only {
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Instagram Scraper</h1>
+        <h1>Social Media Scraper</h1>
         <form id="scraperForm">
             <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required placeholder="Enter Instagram username">
+                <label for="platform">Platform</label>
+                <select id="platform" name="platform" required>
+                    <option value="instagram">Instagram</option>
+                    <option value="tiktok">TikTok</option>
+                </select>
             </div>
-            <div class="form-group">
+            <div class="form-group instagram-only">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" placeholder="Enter Instagram username">
+            </div>
+            <div class="form-group instagram-only">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required placeholder="Enter Instagram password">
+                <input type="password" id="password" name="password" placeholder="Enter Instagram password">
             </div>
             <div class="form-group">
                 <label for="hashtag">Hashtag</label>
@@ -123,9 +138,20 @@
     </div>
 
     <script>
+        const platformSelect = document.getElementById('platform');
+        const instagramFields = document.querySelectorAll('.instagram-only');
+
+        platformSelect.addEventListener('change', (e) => {
+            const isInstagram = e.target.value === 'instagram';
+            instagramFields.forEach(field => {
+                field.style.display = isInstagram ? 'block' : 'none';
+            });
+        });
+
         document.getElementById('scraperForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            const platform = document.getElementById('platform').value;
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const hashtag = document.getElementById('hashtag').value;
@@ -137,18 +163,19 @@
             result.style.display = 'none';
             
             try {
-                const response = await fetch('http://localhost:3000/scrap-ig/', {
+                const endpoint = platform === 'instagram' ? '/scrap-ig/' : '/scrap-tt/';
+                const body = platform === 'instagram' 
+                    ? { username, password, hashtag }
+                    : { hashtag };
+
+                const response = await fetch(`http://localhost:3000${endpoint}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                     },
                     credentials: 'include',
-                    body: JSON.stringify({
-                        username,
-                        password,
-                        hashtag
-                    })
+                    body: JSON.stringify(body)
                 });
                 
                 if (!response.ok) {
